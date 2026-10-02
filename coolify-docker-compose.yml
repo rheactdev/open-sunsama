@@ -45,36 +45,28 @@ services:
     restart: unless-stopped
 
     environment:
-      # Coolify generates/manages the API domain and routes it to port 3001
-      SERVICE_URL_API_3001: /
-
       NODE_ENV: production
       PORT: "3001"
 
       DATABASE_URL: postgresql://${POSTGRES_USER:-opensunsama}:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/${POSTGRES_DB:-opensunsama}
-
       REDIS_URL: redis://redis:6379
 
       MIGRATE_ON_START: "true"
 
-      # Public addresses used by OAuth, CORS, MCP, email links, etc.
-      API_URL: ${SERVICE_URL_API_3001}
-      WEB_APP_URL: ${SERVICE_URL_WEB_3000}
-      FRONTEND_URL: ${SERVICE_URL_WEB_3000}
-      CORS_ORIGIN: ${SERVICE_URL_WEB_3000}
+      API_URL: ${PUBLIC_API_URL:?}
+      WEB_APP_URL: ${PUBLIC_WEB_URL:?}
+      FRONTEND_URL: ${PUBLIC_WEB_URL:?}
+      CORS_ORIGIN: ${PUBLIC_WEB_URL:?}
 
-      # Calendar integrations
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
 
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
 
-      # Email
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_WORKERS_ENABLED: ${EMAIL_WORKERS_ENABLED:-false}
 
-      # Push notifications
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
@@ -94,14 +86,9 @@ services:
       context: .
       dockerfile: Dockerfile.web
       args:
-        # Open Sunsama's Vite bundle needs this at BUILD TIME.
-        VITE_API_URL: ${SERVICE_URL_API_3001}
+        VITE_API_URL: ${PUBLIC_API_URL:?}
 
     restart: unless-stopped
-
-    environment:
-      # Coolify generates/manages the frontend domain and routes it to port 3000
-      SERVICE_URL_WEB_3000: /
 
     depends_on:
       - api
