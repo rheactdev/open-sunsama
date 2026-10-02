@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opensunsama}
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      POSTGRES_DB: ${POSTGRES_DB:-opensunsama}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+
+    command: ["sh", "docker-start.sh"]
+    restart: unless-stopped
+
+    environment:
+      # Coolify generates/manages the API domain and routes it to port 3001
+      SERVICE_URL_API_3001: /
+
+      NODE_ENV: production
+      PORT: "3001"
+
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opensunsama}:${SERVICE_PASSWORD_64_POSTGRES}@postgres:5432/${POSTGRES_DB:-opensunsama}
+
+      REDIS_URL: redis://redis:6379
+
+      MIGRATE_ON_START: "true"
+
+      # Public addresses used by OAuth, CORS, MCP, email links, etc.
+      API_URL: ${SERVICE_URL_API_3001}
+      WEB_APP_URL: ${SERVICE_URL_WEB_3000}
+      FRONTEND_URL: ${SERVICE_URL_WEB_3000}
+      CORS_ORIGIN: ${SERVICE_URL_WEB_3000}
+
+      # Calendar integrations
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+
+      # Email
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_WORKERS_ENABLED: ${EMAIL_WORKERS_ENABLED:-false}
+
+      # Push notifications
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+
+    volumes:
+      - api_secrets:/app/secrets
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        # Open Sunsama's Vite bundle needs this at BUILD TIME.
+        VITE_API_URL: ${SERVICE_URL_API_3001}
+
+    restart: unless-stopped
+
+    environment:
+      # Coolify generates/manages the frontend domain and routes it to port 3000
+      SERVICE_URL_WEB_3000: /
+
+    depends_on:
+      - api
+
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_secrets:
