@@ -3,6 +3,7 @@
  * Handles OAuth flows for Google Calendar and Outlook
  */
 import { Hono } from "hono";
+import { syncLinkedTimeBlocks } from '../services/time-block-calendar-links.js';
 import { zValidator } from "@hono/zod-validator";
 import {
   getDb,
@@ -308,6 +309,7 @@ calendarOAuthRouter.get(
             // Upsert events (per-calendar attribution) and delete removed
             await upsertEvents(userId, syncResult.perCalendar);
             await deleteRemovedEvents(userId, syncResult.perCalendar);
+            await syncLinkedTimeBlocks(userId, { accountId });
 
             // Update sync status to idle
             await updateSyncStatus(accountId, "idle", syncResult.nextSyncToken);

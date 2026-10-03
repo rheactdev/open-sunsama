@@ -47,6 +47,8 @@ export interface CalendarEventAttendee {
 export type CalendarRsvpResponse = 'accepted' | 'declined' | 'tentative';
 
 export interface CalendarEvent {
+  /** Render the linked local block once, rather than duplicating it as an event. */
+  linkedTimeBlockId?: string | null;
   id: string;
   calendarId: string;
   userId: string;

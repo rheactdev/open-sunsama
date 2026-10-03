@@ -63,6 +63,8 @@ export interface SyncResult {
  * (Google: `start.dateTime` ↔ `start.date`).
  */
 export interface EventPatch {
+  /** Optional caller-generated Google event ID for retry-safe insertion. */
+  idempotencyKey?: string;
   title?: string;
   description?: string | null;
   location?: string | null;

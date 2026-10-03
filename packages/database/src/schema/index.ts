@@ -1,4 +1,6 @@
 // Schema exports
+export { timeBlockCalendarLinks } from './time-block-calendar-links';
+export type { LinkedBlockSchedule } from './time-block-calendar-links';
 export {
   users,
   usersRelations,

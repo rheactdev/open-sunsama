@@ -41,6 +41,7 @@ function formatDateForApi(time: Date | string): string {
  * Raw time block from API (with date and time as separate strings)
  */
 interface RawTimeBlock {
+  calendarLink?: TimeBlock['calendarLink'];
   id: string;
   userId: string;
   taskId: string | null;
@@ -66,14 +67,17 @@ function transformTimeBlock(raw: RawTimeBlock): TimeBlock {
   // Use local time interpretation (not UTC)
   const startDateTime = `${raw.date}T${raw.startTime}:00`;
   const endDateTime = `${raw.date}T${raw.endTime}:00`;
+  const end = new Date(endDateTime);
+  if (raw.endTime <= raw.startTime) end.setDate(end.getDate() + 1);
   
   return {
     id: raw.id,
+    calendarLink: raw.calendarLink ?? null,
     userId: raw.userId,
     taskId: raw.taskId,
     title: raw.title,
     startTime: new Date(startDateTime),
-    endTime: new Date(endDateTime),
+    endTime: end,
     color: raw.color,
     notes: raw.description ?? null,
     createdAt: new Date(raw.createdAt),
@@ -102,6 +106,8 @@ interface ApiResponseWrapper<T> {
  * Time Blocks API interface
  */
 export interface TimeBlocksApi {
+  linkCalendar(id: string, calendarId: string, timezone: string): Promise<TimeBlock>;
+  unlinkCalendar(id: string): Promise<void>;
   list(filters?: TimeBlockFilterInput, options?: RequestOptions): Promise<TimeBlock[]>;
   listWithTasks(filters?: TimeBlockFilterInput, options?: RequestOptions): Promise<TimeBlockWithTask[]>;
   create(input: CreateTimeBlockInput, options?: RequestOptions): Promise<TimeBlock>;
@@ -140,6 +146,13 @@ function filtersToSearchParams(
  */
 export function createTimeBlocksApi(client: OpenSunsamaClient): TimeBlocksApi {
   return {
+    async linkCalendar(id, calendarId, timezone) {
+      const response = await client.post<ApiResponseWrapper<RawTimeBlock>>(`time-blocks/${id}/calendar-link`, { calendarId, timezone });
+      return transformTimeBlock(response.data);
+    },
+    async unlinkCalendar(id) {
+      await client.delete(`time-blocks/${id}/calendar-link`);
+    },
     async list(filters?: TimeBlockFilterInput, options?: RequestOptions): Promise<TimeBlock[]> {
       const searchParams = filtersToSearchParams(filters);
       const response = await client.get<ApiResponseWrapper<RawTimeBlock[]>>("time-blocks", {

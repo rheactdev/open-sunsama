@@ -39,6 +39,7 @@ import {
   stopSubtaskTimers,
 } from "../lib/timer-service.js";
 import { moveBlocksWithTasks } from "../services/task-blocks.js";
+import { syncLinkedTimeBlocks } from '../services/time-block-calendar-links.js';
 import { format, subDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { getPgBoss, JOBS } from "../lib/pgboss.js";
@@ -344,7 +345,7 @@ tasksRouter.patch(
     const userId = c.get("userId");
     const { id } = c.req.valid("param");
     const updates = c.req.valid("json");
-    return withTimerTransition(getDb(), userId, async (db, publishEvent) => {
+    const response = await withTimerTransition(getDb(), userId, async (db, publishEvent) => {
 
       const [existing] = await db
         .select()
@@ -429,6 +430,8 @@ tasksRouter.patch(
 
       return c.json({ success: true, data: updatedTask });
     });
+    if (updates.scheduledDate !== undefined) await syncLinkedTimeBlocks(userId);
+    return response;
   }
 );
 
@@ -638,6 +641,7 @@ tasksRouter.post(
     );
 
     const movedBlocks = await moveBlocksWithTasks(userId, previousDays, targetDate);
+    if (movedBlocks > 0) await syncLinkedTimeBlocks(userId);
     if (movedBlocks > 0) publishEvent(userId, "timeblock:updated", { date });
 
     // Fetch all tasks for the target date

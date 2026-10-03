@@ -252,6 +252,7 @@ function handleWebSocketEvent(
       // calendarKeys.all is the prefix for accounts/list/events, so this
       // single refetch covers all sub-trees.
       queryClient.refetchQueries({ queryKey: calendarKeys.all });
+      batcher.schedule(timeBlockKeys.all);
       break;
 
     case "integration:account-connected":

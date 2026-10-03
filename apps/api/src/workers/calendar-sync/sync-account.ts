@@ -3,6 +3,7 @@
  * Syncs events for a single calendar account
  */
 import type PgBoss from 'pg-boss';
+import { syncLinkedTimeBlocks } from '../../services/time-block-calendar-links.js';
 import { getDb, eq } from '@open-sunsama/database';
 import { calendarAccounts, calendars } from '@open-sunsama/database/schema';
 import { subDays, addDays, startOfDay, endOfDay } from 'date-fns';
@@ -134,6 +135,7 @@ export async function processSyncAccount(
 
     // Upsert synced events (each event attributed to its source calendar)
     await upsertEvents(userId, result.perCalendar);
+    await syncLinkedTimeBlocks(userId, { accountId });
 
     // Update sync status
     await updateSyncStatus(accountId, 'idle', result.nextSyncToken);

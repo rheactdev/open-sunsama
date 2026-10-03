@@ -3,6 +3,7 @@
  * Handles listing, disconnecting, and syncing calendar accounts
  */
 import { Hono } from 'hono';
+import { syncLinkedTimeBlocks } from '../services/time-block-calendar-links.js';
 import { zValidator } from '@hono/zod-validator';
 import {
   getDb,
@@ -265,6 +266,7 @@ calendarAccountsRouter.post(
 
       await deleteRemovedEvents(userId, syncResult.perCalendar);
       await upsertEvents(userId, syncResult.perCalendar);
+      await syncLinkedTimeBlocks(userId, { accountId: id });
       await updateSyncStatus(id, 'idle', syncResult.nextSyncToken);
 
       // Register Google `events.watch` channels for any calendars
