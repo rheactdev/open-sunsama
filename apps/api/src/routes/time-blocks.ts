@@ -9,6 +9,8 @@ import { getDb, eq, and, asc, timeBlocks, tasks, users, sql } from '@open-sunsam
 import { NotFoundError, uuidSchema } from '@open-sunsama/utils';
 import { auth, requireScopes, type AuthVariables } from '../middleware/auth.js';
 import { calculateCascadeShifts } from '../services/time-block-cascade.js';
+import { linkTimeBlock, unlinkTimeBlock, syncLinkedTimeBlocks, withCalendarLinks } from '../services/time-block-calendar-links.js';
+import { isValidTimezone } from '../lib/calendar-day-window.js';
 import {
   createTimeBlockSchema, updateTimeBlockSchema, timeBlockFilterSchema, calculateDuration,
   quickScheduleSchema, calculateEndTime, cascadeResizeSchema, autoScheduleSchema,
@@ -141,7 +143,7 @@ timeBlocksRouter.get('/', requireScopes('time-blocks:read'), zValidator('query',
 
   return c.json({
     success: true,
-    data: results.map(({ timeBlock, task }) => ({ ...timeBlock, task: task || null })),
+    data: await withCalendarLinks(userId, results.map(({ timeBlock, task }) => ({ ...timeBlock, task: task || null }))),
     meta: { page: filters.page, limit: filters.limit, total, totalPages: Math.ceil(total / filters.limit) },
   });
 });
@@ -314,8 +316,31 @@ timeBlocksRouter.get('/:id', requireScopes('time-blocks:read'), zValidator('para
     .limit(1);
 
   if (!result) throw new NotFoundError('Time block', id);
-  return c.json({ success: true, data: { ...result.timeBlock, task: result.task || null } });
+  const [data] = await withCalendarLinks(userId, [{ ...result.timeBlock, task: result.task || null }]);
+  return c.json({ success: true, data });
 });
+
+// Publishing requires explicit consent AND calendar write permission. Normal
+// create, quick-schedule, auto-schedule and PATCH cannot create a link.
+timeBlocksRouter.post('/:id/calendar-link', requireScopes('time-blocks:write', 'user:write'),
+  zValidator('param', z.object({ id: uuidSchema })),
+  zValidator('json', z.object({ calendarId: uuidSchema, timezone: z.string().max(100).refine(isValidTimezone, 'Invalid timezone') }).strict()),
+  async (c) => {
+    const userId = c.get('userId');
+    const { id } = c.req.valid('param');
+    const { calendarId, timezone } = c.req.valid('json');
+    await linkTimeBlock(userId, id, calendarId, timezone);
+    const [block] = await getDb().select().from(timeBlocks).where(and(eq(timeBlocks.id, id), eq(timeBlocks.userId, userId)));
+    if (!block) throw new NotFoundError('Time block', id);
+    const [data] = await withCalendarLinks(userId, [block]);
+    return c.json({ success: true, data });
+  });
+
+timeBlocksRouter.delete('/:id/calendar-link', requireScopes('time-blocks:write', 'user:write'),
+  zValidator('param', z.object({ id: uuidSchema })), async (c) => {
+    await unlinkTimeBlock(c.get('userId'), c.req.valid('param').id);
+    return c.json({ success: true });
+  });
 
 /** PATCH /time-blocks/:id - Update a time block */
 timeBlocksRouter.patch('/:id', requireScopes('time-blocks:write'), zValidator('param', z.object({ id: uuidSchema })), zValidator('json', updateTimeBlockSchema), async (c) => {
@@ -361,7 +386,10 @@ timeBlocksRouter.patch('/:id', requireScopes('time-blocks:write'), zValidator('p
     });
   }
 
-  return c.json({ success: true, data: { ...updatedTimeBlock, task } });
+  await syncLinkedTimeBlocks(userId, { blockIds: [id] });
+  const [latest] = await db.select().from(timeBlocks).where(and(eq(timeBlocks.id, id), eq(timeBlocks.userId, userId)));
+  const [data] = await withCalendarLinks(userId, latest ? [{ ...latest, task }] : []);
+  return c.json({ success: true, data });
 });
 
 /** PATCH /time-blocks/:id/cascade-resize - Resize a block and cascade shift subsequent blocks */
@@ -441,7 +469,8 @@ timeBlocksRouter.patch('/:id/cascade-resize', requireScopes('time-blocks:write')
     });
   }
 
-  return c.json({ success: true, data: updatedBlocksWithTasks });
+  await syncLinkedTimeBlocks(userId, { blockIds: updatedBlocks.map(block => block.id) });
+  return c.json({ success: true, data: await withCalendarLinks(userId, updatedBlocksWithTasks) });
 });
 
 /** DELETE /time-blocks/:id - Delete a time block */
@@ -454,6 +483,8 @@ timeBlocksRouter.delete('/:id', requireScopes('time-blocks:write'), zValidator('
   if (!existing) throw new NotFoundError('Time block', id);
 
   await db.delete(timeBlocks).where(and(eq(timeBlocks.id, id), eq(timeBlocks.userId, userId)));
+  // The link's SET NULL FK retains deletion work if Google is unavailable.
+  await syncLinkedTimeBlocks(userId);
 
   // Publish realtime event (fire and forget)
   publishEvent(userId, 'timeblock:deleted', {

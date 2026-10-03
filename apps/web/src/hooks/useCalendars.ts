@@ -122,7 +122,7 @@ export function useCalendarEvents(from: string, to: string, enabled = true) {
         "calendar-events",
         { searchParams: { from, to } }
       );
-      return response.data;
+      return response.data.filter(event => !event.linkedTimeBlockId);
     },
     enabled,
   });

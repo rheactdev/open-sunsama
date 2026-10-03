@@ -5,11 +5,24 @@
 
 import type { Task } from './task.js';
 
+export interface TimeBlockCalendarLink {
+  calendarId: string;
+  calendarName: string;
+  accountEmail: string;
+  provider: 'google';
+  timezone: string;
+  htmlLink: string | null;
+  status: 'pending' | 'synced' | 'error';
+  syncError: string | null;
+}
+
 /**
  * Represents a time block in the Open Sunsama system.
  * Time blocks are scheduled periods of time allocated for specific tasks.
  */
 export interface TimeBlock {
+  /** Only present after an explicit Add to calendar action on this block. */
+  calendarLink?: TimeBlockCalendarLink | null;
   /** Unique identifier for the time block (UUID format) */
   id: string;
 

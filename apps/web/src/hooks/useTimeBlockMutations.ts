@@ -8,7 +8,7 @@ import type {
 } from "@open-sunsama/types";
 import { getApi } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { timeBlockKeys } from "@/lib/query-keys";
+import { timeBlockKeys, calendarKeys } from "@/lib/query-keys";
 import { trackGoal } from "@/lib/analytics";
 
 /**
@@ -66,6 +66,10 @@ export function useUpdateTimeBlock() {
       return await api.timeBlocks.update(id, data);
     },
     onSuccess: (updatedTimeBlock) => {
+      if (updatedTimeBlock.calendarLink) {
+        queryClient.invalidateQueries({ queryKey: calendarKeys.all });
+        if (updatedTimeBlock.calendarLink.syncError) toast({ variant: 'destructive', title: 'Time saved; calendar sync needs attention', description: updatedTimeBlock.calendarLink.syncError });
+      }
       // Update the time block in cache
       queryClient.setQueryData(
         timeBlockKeys.detail(updatedTimeBlock.id),

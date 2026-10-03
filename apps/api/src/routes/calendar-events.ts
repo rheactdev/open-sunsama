@@ -4,6 +4,7 @@
  * that support it.
  */
 import { Hono } from 'hono';
+import { syncLinkedTimeBlocks } from '../services/time-block-calendar-links.js';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import {
@@ -13,9 +14,11 @@ import {
   gte,
   lte,
   inArray,
+  isNull,
   calendars,
   calendarAccounts,
   calendarEvents,
+  timeBlockCalendarLinks,
   users,
 } from '@open-sunsama/database';
 import {
@@ -185,11 +188,15 @@ calendarEventsRouter.get(
       ? events.filter((event) => eventFallsInWindow(event, dayWindow))
       : events;
 
+    const linkedBlocks = await db.select({ calendarId: timeBlockCalendarLinks.calendarId, externalId: timeBlockCalendarLinks.externalId, blockId: timeBlockCalendarLinks.timeBlockId })
+      .from(timeBlockCalendarLinks).where(and(eq(timeBlockCalendarLinks.userId, userId), isNull(timeBlockCalendarLinks.syncError)));
+    const linkedByEvent = new Map(linkedBlocks.map(link => [`${link.calendarId}:${link.externalId}`, link.blockId]));
     // Enrich events with calendar info
     const enrichedEvents = inRange.map((event) => {
       const calendar = calendarsMap.get(event.calendarId);
       return {
         ...event,
+        linkedTimeBlockId: linkedByEvent.get(`${event.calendarId}:${event.externalId}`) ?? null,
         calendar: calendar
           ? {
               id: calendar.id,
@@ -660,6 +667,7 @@ calendarEventsRouter.patch(
       );
     }
 
+    await syncLinkedTimeBlocks(userId, { accountId: row.account.id });
     // Write-through to local DB so the user sees the change immediately
     // without waiting for the next sync. The provider response is the
     // canonical post-write state.
@@ -962,6 +970,7 @@ calendarEventsRouter.delete(
     }
 
     await db.delete(calendarEvents).where(eq(calendarEvents.id, eventId));
+    await syncLinkedTimeBlocks(userId, { accountId: row.account.id });
 
     await publishEvent(userId, 'calendar-event:deleted', {
       id: eventId,

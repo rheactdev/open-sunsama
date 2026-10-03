@@ -1,5 +1,6 @@
 import { TIME_EDIT_KEYS, matchesTimeEditShortcut, usePriorityShortcut } from "@/hooks/useKeyboardShortcuts";
 import * as React from "react";
+import { TimeBlocksList } from './task-time-blocks';
 import { createPortal } from "react-dom";
 import {
   format,
@@ -901,6 +902,11 @@ export function TaskModal({
           </div>
         )}
         {subtasks}
+        {!isCompose && timeBlocks.length > 0 && (
+          <div className={isMobile ? 'px-5 pt-4' : 'pl-[60px] pr-8 pt-4'}>
+            <TimeBlocksList timeBlocks={timeBlocks} />
+          </div>
+        )}
         {notes}
       </div>
     </>

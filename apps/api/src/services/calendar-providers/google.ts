@@ -238,6 +238,21 @@ export class GoogleCalendarProvider implements CalendarProvider {
     };
   }
 
+  async getEvent(accessToken: string, calendarId: string, eventId: string): Promise<ExternalEvent> {
+    const response = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15_000) }
+    );
+    if (response.status === 404 || response.status === 410) throw new ProviderEventNotFoundError('google');
+    if (response.status === 401 || response.status === 403) throw new ProviderAuthError('google');
+    if (!response.ok) throw new Error(`Google getEvent failed (${response.status})`);
+    const data = (await response.json()) as GoogleEvent;
+    if (data.status === 'cancelled') throw new ProviderEventNotFoundError('google');
+    const parsed = parseGoogleEvent(data);
+    if (!parsed) throw new Error('Google returned an event that could not be parsed');
+    return parsed;
+  }
+
   async createEvent(
     accessToken: string,
     calendarId: string,
@@ -254,6 +269,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
     const body: Partial<GoogleEvent> = {
       summary: payload.title,
     };
+    if (payload.idempotencyKey) body.id = payload.idempotencyKey;
     if (payload.description !== undefined) {
       body.description = payload.description ?? '';
     }
@@ -279,6 +295,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`,
       {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -287,6 +304,9 @@ export class GoogleCalendarProvider implements CalendarProvider {
       }
     );
 
+    if (response.status === 409 && payload.idempotencyKey) {
+      return this.getEvent(accessToken, calendarId, payload.idempotencyKey);
+    }
     if (!response.ok) {
       if (response.status === 404 || response.status === 410) {
         throw new ProviderEventNotFoundError('google');
@@ -353,6 +373,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
       {
         method: 'PATCH',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -448,6 +469,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
       {
         method: 'DELETE',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },

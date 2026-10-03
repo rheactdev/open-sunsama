@@ -3,6 +3,7 @@ import { Clock } from "lucide-react";
 import type { TimeBlock } from "@open-sunsama/types";
 import { formatDuration } from "@/lib/utils";
 import { Label, Badge } from "@/components/ui";
+import { TimeBlockCalendarAction } from './time-block-calendar-action';
 
 interface TimeBlockItemProps {
   timeBlock: TimeBlock;
@@ -16,7 +17,7 @@ export function TimeBlockItem({ timeBlock }: TimeBlockItemProps) {
   );
 
   return (
-    <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/30 px-3 py-2">
       <div>
         <p className="text-sm font-medium">
           {format(startTime, "EEE, MMM d")}
@@ -25,7 +26,10 @@ export function TimeBlockItem({ timeBlock }: TimeBlockItemProps) {
           {format(startTime, "h:mm a")} - {format(endTime, "h:mm a")}
         </p>
       </div>
-      <Badge variant="secondary">{formatDuration(durationMins)}</Badge>
+      <div className="flex flex-wrap items-center gap-1">
+        <Badge variant="secondary">{formatDuration(durationMins)}</Badge>
+        <TimeBlockCalendarAction timeBlock={timeBlock} />
+      </div>
     </div>
   );
 }

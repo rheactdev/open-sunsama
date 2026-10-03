@@ -77,6 +77,7 @@ export type {
 
 // Time block types
 export type {
+  TimeBlockCalendarLink,
   TimeBlock,
   CreateTimeBlockInput,
   UpdateTimeBlockInput,
